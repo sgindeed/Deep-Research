@@ -1,0 +1,14 @@
+# Ignore Python environment and database
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite
+
+# Ignore Frontend dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# General files
+.env
+.DS_Store
