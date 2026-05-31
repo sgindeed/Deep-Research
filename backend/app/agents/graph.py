@@ -207,7 +207,23 @@ class DeepResearchWorkflowExecutor:
         self.current_agent = "Report Writer Agent"
         await self.update_callback(self.current_agent, 90.0, "Synthesizing full analytical response text.")
         
-        report_prompt = f"Write a comprehensive report on the query: '{self.query}'. Organize with Markdown headers: # Executive Summary, # Deep Analysis, # Contradiction Evaluation, and # Future Implications. Use information from {len(self.sources)} compiled sources. Include inline reference citations."
+        report_prompt = f"""
+        Write a comprehensive, enterprise-grade research report on the query: '{self.query}'. 
+        Organize with exactly these Markdown headers: 
+        # Executive Summary
+        # Deep Analysis
+        # Contradiction Evaluation
+        # Future Implications
+        
+        STRICT FORMATTING REQUIREMENTS:
+        - You MUST include at least one Markdown table to compare data, entities, or statistics.
+        - Use bulleted and numbered lists to break down key takeaways.
+        - Use **bold text** to emphasize crucial insights and metrics.
+        - Maintain a highly professional, analytical, and objective tone (like a McKinsey or Gartner report).
+        
+        Synthesize the information from the {len(self.sources)} compiled sources. Always include inline reference citations (e.g., [1], [2]).
+        """
+        
         self.final_report = await self.llm.generate([{"role": "user", "content": report_prompt}], temperature=0.3)
         
         await self.update_callback("Complete", 100.0, "Research processing finalized safely.")
