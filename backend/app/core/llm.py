@@ -3,6 +3,9 @@ import httpx
 import asyncio
 import logging
 from typing import List, Dict, Any, AsyncGenerator
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("LLMClient")
@@ -18,7 +21,8 @@ class ResilientLLMClient:
             "llama-3.1-8b-instant",       # 4. Fallback 3: Blazing fast, highly reliable
             "gemma2-9b-it",               # 5. Fallback 4: Google's architecture, great redundancy
             "llama3-8b-8192",             # 6. Fallback 5: Standard Llama 3 8B
-            "llama-3.2-3b-preview"        # 7. Last Resort: Ultra-light, almost never rate-limited
+            "llama-3.2-3b-preview",       # 7. Last Resort: Ultra-light, almost never rate-limited
+            "qwen3-7b-instant"            # 8. Emergency Backup: Qwen's fastest, most efficient model
         ]
         if not self.api_key:
             logger.warning("GROQ_API_KEY missing from environment context.")
