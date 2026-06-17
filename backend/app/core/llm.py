@@ -1,8 +1,7 @@
 import os
 import httpx
-import asyncio
 import logging
-from typing import List, Dict, Any, AsyncGenerator
+from typing import List, Dict, AsyncGenerator
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,76 +13,82 @@ class ResilientLLMClient:
     def __init__(self):
         self.api_key = os.getenv("GROQ_API_KEY", "")
         self.endpoint = "https://api.groq.com/openai/v1/chat/completions"
+        
+        # Updated to Groq's most stable and current model roster
         self.models = [
-            "llama-3.3-70b-versatile",    # 1. Primary: Smartest and highly capable
-            "mixtral-8x7b-32768",         # 2. Fallback 1: Excellent context window
-            "llama3-70b-8192",            # 3. Fallback 2: Previous gen heavy-hitter
-            "llama-3.1-8b-instant",       # 4. Fallback 3: Blazing fast, highly reliable
-            "gemma2-9b-it",               # 5. Fallback 4: Google's architecture, great redundancy
-            "llama3-8b-8192",             # 6. Fallback 5: Standard Llama 3 8B
-            "llama-3.2-3b-preview",       # 7. Last Resort: Ultra-light, almost never rate-limited
-            "qwen3-7b-instant"            # 8. Emergency Backup: Qwen's fastest, most efficient model
+            "llama-3.3-70b-versatile",    # 1. Primary flagship
+            "llama-3.1-8b-instant",       # 2. Blazing fast fallback
+            "mixtral-8x7b-32768",         # 3. Deep context fallback
+            "gemma2-9b-it"                # 4. Redundancy fallback
         ]
-        if not self.api_key:
-            logger.warning("GROQ_API_KEY missing from environment context.")
 
-    async def generate(self, messages: List[Dict[str, str]], temperature: float = 0.2, stream: bool = False) -> str:
-        last_exception = None
-        for model in self.models:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "stream": stream
-                }
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(self.endpoint, json=payload, headers=headers)
-                    if response.status_code == 429:
-                        logger.warning(f"Rate limited on model {model}. Attempting fallback topology.")
-                        continue
-                    response.raise_for_status()
-                    data = response.json()
-                    return data["choices"][0]["message"]["content"]
-            except Exception as e:
-                logger.error(f"Failure processing completion with model {model}: {str(e)}")
-                last_exception = e
-                continue
-        raise RuntimeError(f"All available models exhausted in fallback ring. Last error: {str(last_exception)}")
-
-    async def generate_stream(self, messages: List[Dict[str, str]], temperature: float = 0.2) -> AsyncGenerator[str, None]:
-        # Implementation fallback variant for token-by-token streaming requirements
+    async def generate(self, messages: List[Dict[str, str]], temperature: float = 0.3) -> str:
+        """Standard generation with auto-cascading fallbacks."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        # Force secondary backup if deepseek rate bounds occur during direct streams
-        model = self.models[1] 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "stream": True
+        
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature
+            }
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(self.endpoint, json=payload, headers=headers)
+                    if response.status_code == 200:
+                        return response.json()["choices"][0]["message"]["content"]
+                    else:
+                        logger.warning(f"Generation failed on {model} (Code {response.status_code}): {response.text}")
+                        continue # Immediately try the next model
+            except Exception as e:
+                logger.warning(f"Connection exception on {model}: {str(e)}")
+                continue
+                
+        return "Error: All Groq models exhausted. Please check your API limits or network."
+
+    async def generate_stream(self, messages: List[Dict[str, str]], temperature: float = 0.5) -> AsyncGenerator[str, None]:
+        """Streaming generation with auto-cascading fallbacks."""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                async with client.stream("POST", self.endpoint, json=payload, headers=headers) as response:
-                    if response.status_code != 200:
-                        yield f"[Fallback Routing Notification: API Error {response.status_code}]"
-                        return
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: ") and not line.endswith("[DONE]"):
-                            import json
-                            try:
-                                chunk = json.loads(line[6:])
-                                delta = chunk["choices"][0]["delta"].get("content", "")
-                                if delta:
-                                    yield delta
-                            except Exception:
-                                pass
-        except Exception as e:
-            yield f"\n[Streaming Interruption Exception: {str(e)}]"
+        
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True
+            }
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    async with client.stream("POST", self.endpoint, json=payload, headers=headers) as response:
+                        
+                        # If the model is accepted, stream the chunks to the UI
+                        if response.status_code == 200:
+                            async for line in response.aiter_lines():
+                                if line.startswith("data: ") and not line.endswith("[DONE]"):
+                                    import json
+                                    try:
+                                        chunk = json.loads(line[6:])
+                                        delta = chunk["choices"][0]["delta"].get("content", "")
+                                        if delta:
+                                            yield delta
+                                    except Exception:
+                                        pass
+                            return # Exit generator completely upon success
+                            
+                        # If Groq throws a 400/429/500, read the error and try the next model
+                        else:
+                            await response.aread() 
+                            logger.warning(f"Streaming rejected by {model} (Code {response.status_code}): {response.text}")
+                            continue 
+                            
+            except Exception as e:
+                logger.warning(f"Streaming exception on {model}: {str(e)}")
+                continue
+                
+        yield "\n[System Notice: The neural matrix failed to respond. All backup models are currently exhausted or rate-limited.]"

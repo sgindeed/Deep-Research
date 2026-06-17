@@ -12,7 +12,6 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # One-to-Many relationship: A user can have many research sessions
     sessions = relationship("ResearchSession", back_populates="owner", cascade="all, delete-orphan")
 
 
@@ -28,6 +27,13 @@ class ResearchSession(Base):
 
     sources = Column(JSON, default=list)
     contradictions = Column(JSON, default=list)
+    
+    future_report = Column(Text, nullable=True)
+    future_outcomes = Column(JSON, default=list)
+    debate_transcript = Column(JSON, default=list)
+    
+    # THIS IS THE CRITICAL LINE THAT WAS MISSING IN MEMORY
+    graph_data = Column(JSON, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     owner = relationship("User", back_populates="sessions")

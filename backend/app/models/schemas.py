@@ -24,11 +24,11 @@ class ResearchStatusResponse(BaseModel):
 
 class GraphNode(BaseModel):
     id: str
-    type: str  # We will use this for the dynamic LLM category (e.g., "Tech Blog")
+    type: str  
     label: str
     metadata: Dict[str, Any]
-    color: Optional[str] = None # NEW: The LLM will define this hex code
-    description: Optional[str] = None # NEW: The LLM's 2-sentence summary
+    color: Optional[str] = None 
+    description: Optional[str] = None 
 
 class GraphEdge(BaseModel):
     source: str
@@ -48,9 +48,17 @@ class SourceMetadata(BaseModel):
     recency_score: float
     citation_frequency: int = 0
 
+class FutureOutcome(BaseModel):
+    scenario: str
+    confidence_percentage: float
+    description: str
+
 class FinalReportResponse(BaseModel):
     research_id: UUID
     markdown_content: str
     sources: List[SourceMetadata]
     contradiction_map: List[Dict[str, Any]]
     confidence_score: float
+    future_report_markdown: Optional[str] = None
+    future_outcomes: List[FutureOutcome] = []
+    debate_transcript: List[Dict[str, Any]] = []
