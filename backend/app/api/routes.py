@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc
 
-from app.models.schemas import ResearchRequest, ResearchStatusResponse, FinalReportResponse
+from app.models.schemas import ResearchRequest, FinalReportResponse
 from app.models.db_models import ResearchSession, User
 from app.db.database import get_db, AsyncSessionLocal
 from app.core.auth import get_current_user
-from app.agents.graph import DeepResearchWorkflowExecutor
+from app.agents.executor import DeepResearchWorkflowExecutor
 from app.services.simulation import FutureSimulationEngine
 from app.core.llm import ResilientLLMClient
 from app.websocket.manager import ws_manager
@@ -46,7 +46,6 @@ async def run_background_workflow(session_id: UUID, executor: DeepResearchWorkfl
         if session_id in active_jobs:
             del active_jobs[session_id]
 
-# --- NEW: Background task for Simulation Streaming ---
 async def run_simulation_workflow(session_id: UUID, query: str, context: str):
     async def sim_callback(payload: dict):
         await ws_manager.send_simulation_update(session_id, payload)
@@ -64,7 +63,6 @@ async def run_simulation_workflow(session_id: UUID, query: str, context: str):
             await db.commit()
             
     await ws_manager.send_simulation_update(session_id, {"type": "complete"})
-
 
 @router.post("/research/start", response_model=Dict[str, Any])
 async def start_research(payload: ResearchRequest, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -114,8 +112,14 @@ async def get_final_report(id: UUID, db: AsyncSession = Depends(get_db)):
     if id in active_jobs:
         job = active_jobs[id]
         return FinalReportResponse(
-            research_id=id, markdown_content=job.final_report, sources=job.sources, contradiction_map=job.contradictions,
-            confidence_score=job.confidence_score, future_report_markdown=job.future_report, future_outcomes=job.future_outcomes, debate_transcript=job.debate_transcript
+            research_id=id, 
+            markdown_content=job.final_report, 
+            sources=job.sources, 
+            contradiction_map=job.contradictions,
+            confidence_score=job.confidence_score, 
+            future_report_markdown=job.future_report, 
+            future_outcomes=job.future_outcomes, 
+            debate_transcript=job.debate_transcript
         )
     
     result = await db.execute(select(ResearchSession).where(ResearchSession.id == str(id)))
@@ -124,28 +128,15 @@ async def get_final_report(id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found.")
         
     return FinalReportResponse(
-        research_id=id, markdown_content=db_session.final_report, sources=db_session.sources or [], contradiction_map=db_session.contradictions or [],
-        confidence_score=db_session.confidence_score or 1.0, future_report_markdown=db_session.future_report, future_outcomes=db_session.future_outcomes or [], debate_transcript=db_session.debate_transcript or []
+        research_id=id, 
+        markdown_content=db_session.final_report, 
+        sources=db_session.sources or [], 
+        contradiction_map=db_session.contradictions or [],
+        confidence_score=db_session.confidence_score or 1.0, 
+        future_report_markdown=db_session.future_report, 
+        future_outcomes=db_session.future_outcomes or [], 
+        debate_transcript=db_session.debate_transcript or []
     )
-
-@router.get("/research/graph/{id}")
-async def get_research_graph(id: UUID, db: AsyncSession = Depends(get_db)):
-    # 1. First, check if the mind is currently active and processing
-    if id in active_jobs:
-        job = active_jobs[id]
-        nodes_payload = [{"id": str(node), "type": data.get("type", "unknown"), "label": data.get("label", str(node)), "color": data.get("color", "#9ca3af"), "description": data.get("description", ""), "metadata": data.get("metadata", {})} for node, data in job.graph.nodes(data=True)]
-        edges_payload = [{"source": str(u), "target": str(v), "relation": data.get("relation", "links")} for u, v, data in job.graph.edges(data=True)]
-        return {"nodes": nodes_payload, "edges": edges_payload}
-        
-    # 2. If finished, retrieve the permanent memory from the database
-    result = await db.execute(select(ResearchSession).where(ResearchSession.id == str(id)))
-    db_session = result.scalar_one_or_none()
-    
-    # 3. Prevent the 404 Void! Return an empty array gracefully if nothing exists
-    if not db_session or not db_session.graph_data:
-        return {"nodes": [], "edges": []}
-        
-    return db_session.graph_data
 
 @router.websocket("/ws/research/{id}")
 async def websocket_research_endpoint(websocket: WebSocket, id: UUID):

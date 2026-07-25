@@ -91,4 +91,4 @@ class ResilientLLMClient:
                 logger.warning(f"Streaming exception on {model}: {str(e)}")
                 continue
                 
-        yield "\n[System Notice: The neural matrix failed to respond. All backup models are currently exhausted or rate-limited.]"
+        yield "\n[System Notice: The neural matrix failed to respond. All backup models are currently exhausted or rate-limited.]" 

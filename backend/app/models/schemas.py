@@ -13,32 +13,6 @@ class ResearchRequest(BaseModel):
     depth: ResearchDepth = ResearchDepth.MEDIUM
     max_iterations: int = Field(default=5, ge=1, le=15)
 
-class ResearchStatusResponse(BaseModel):
-    research_id: UUID
-    status: str
-    current_agent: str
-    progress_percentage: float
-    iteration_count: int
-    sources_found_count: int
-    confidence_score: float
-
-class GraphNode(BaseModel):
-    id: str
-    type: str  
-    label: str
-    metadata: Dict[str, Any]
-    color: Optional[str] = None 
-    description: Optional[str] = None 
-
-class GraphEdge(BaseModel):
-    source: str
-    target: str
-    relation: str
-
-class ResearchGraphResponse(BaseModel):
-    nodes: List[GraphNode]
-    edges: List[GraphEdge]
-
 class SourceMetadata(BaseModel):
     url: str
     title: str

@@ -31,9 +31,6 @@ class ResearchSession(Base):
     future_report = Column(Text, nullable=True)
     future_outcomes = Column(JSON, default=list)
     debate_transcript = Column(JSON, default=list)
-    
-    # THIS IS THE CRITICAL LINE THAT WAS MISSING IN MEMORY
-    graph_data = Column(JSON, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     owner = relationship("User", back_populates="sessions")
